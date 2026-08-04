@@ -4,6 +4,7 @@ Entry point. Run daily via cron or GitHub Actions.
     python main.py              # full run, sends email
     python main.py --dry-run    # writes digest_preview.html instead of sending
     python main.py --demo       # runs on bundled sample data, no network
+    python main.py --diagnose   # shows which companies have a readable job board
 """
 
 import sys
@@ -11,31 +12,63 @@ import argparse
 
 import config
 import discover
+import seeds
 import ats
 import signals
 import digest
 from store import Store
 
 
-def run(dry_run=False, lookback_days=7, limit=None, verbose=True):
-    # If email is not configured, run in preview mode and record nothing, so
-    # the accounts found today are still fresh when you do set email up.
-    can_send = bool(config.SMTP_USER and config.SMTP_PASS) and not dry_run
+def build_worklist(lookback_days, verbose):
+    """
+    Two sources of companies:
+      1. Seed list, checked every run. Reliable, gives steady signal.
+      2. Funding news, which adds fresh names and attaches funding context.
+    """
+    print("Discovering companies from funding news...")
+    discovered = discover.discover(lookback_days=lookback_days, verbose=verbose)
+    print(f"Found {len(discovered)} company/companies in the news\n")
+
+    worklist = {}
+
+    for name in seeds.SEED_COMPANIES:
+        key = discover.slugify(name)
+        worklist[key] = {
+            "name": name,
+            "slug": key,
+            "funding_stage": "unknown",
+            "funding_amount": "",
+            "funding_url": "",
+            "source": "seed",
+        }
+
+    # News entries overwrite seeds so the funding context is not lost
+    for company in discovered:
+        company["source"] = "news"
+        worklist[company["slug"]] = company
+
+    print(f"Watching {len(worklist)} companies "
+          f"({len(seeds.SEED_COMPANIES)} on the seed list, "
+          f"{len(discovered)} from the news)\n")
+    return list(worklist.values())
+
+
+def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False):
+    can_send = bool(config.SMTP_USER and config.SMTP_PASS) and not dry_run and not diagnose
     if not can_send:
-        print("Email not configured, running in preview mode. Nothing will be saved.\n")
+        print("Email not configured or preview mode. Nothing will be saved.\n")
 
     store = Store(persist=can_send)
     results = []
 
-    print("Discovering companies from funding news...")
-    discovered = discover.discover(lookback_days=lookback_days, verbose=verbose)
-    print(f"Found {len(discovered)} candidate companies\n")
-
+    worklist = build_worklist(lookback_days, verbose)
     if limit:
-        discovered = discovered[:limit]
+        worklist = worklist[:limit]
 
     print("Checking job boards...")
-    for company in discovered:
+    with_board, without_board = [], []
+
+    for company in worklist:
         name = company["name"]
         existing = store.get_company(name) or {}
 
@@ -46,10 +79,10 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True):
             name,
             known_ats=existing.get("ats"),
             known_slug=existing.get("ats_slug"),
-            verbose=verbose,
         )
 
         if not jobs:
+            without_board.append(name)
             store.upsert_company(
                 name,
                 probe_failed=existing.get("probe_failed", 0) + 1,
@@ -58,6 +91,9 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True):
                 funding_url=company["funding_url"],
             )
             continue
+
+        with_board.append((name, found_ats, slug, len(jobs)))
+        print(f"  {name:<28} {found_ats}/{slug}  {len(jobs)} open roles")
 
         store.upsert_company(
             name,
@@ -80,10 +116,29 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True):
             results.append(scored)
             store.mark_reported(name, scored["score"], scored)
 
+    # -- summary -----------------------------------------------------------
+    print(f"\n{'-' * 55}")
+    print(f"Companies checked          : {len(worklist)}")
+    print(f"Readable job board found   : {len(with_board)}")
+    print(f"No board found             : {len(without_board)}")
+    print(f"Cleared score threshold {config.MIN_SCORE_TO_REPORT:<3}: {len(results)}")
+    print(f"{'-' * 55}\n")
+
+    if diagnose:
+        print("Companies WITH a readable board:")
+        for name, a, s, n in sorted(with_board):
+            print(f"  {name:<30} {a}/{s}  ({n} roles)")
+        print("\nCompanies with NO board found:")
+        for name in sorted(without_board):
+            print(f"  {name}")
+        store.close()
+        return []
+
     results.sort(key=lambda r: r["score"], reverse=True)
-    print(f"\n{len(results)} account(s) cleared the threshold of {config.MIN_SCORE_TO_REPORT}")
     for r in results:
         print(f"  {r['score']:>3}  {r['company']}")
+        for reason in r["reasons"][:3]:
+            print(f"         {reason}")
 
     digest.send(results, dry_run=dry_run)
     store.close()
@@ -124,6 +179,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="write HTML preview, do not send")
     parser.add_argument("--demo", action="store_true", help="run offline on sample data")
+    parser.add_argument("--diagnose", action="store_true", help="report job board coverage only")
     parser.add_argument("--days", type=int, default=7, help="funding news lookback window")
     parser.add_argument("--limit", type=int, default=None, help="cap companies checked per run")
     args = parser.parse_args()
@@ -132,4 +188,4 @@ if __name__ == "__main__":
         demo()
         sys.exit(0)
 
-    run(dry_run=args.dry_run, lookback_days=args.days, limit=args.limit)
+    run(dry_run=args.dry_run, lookback_days=args.days, limit=args.limit, diagnose=args.diagnose)
