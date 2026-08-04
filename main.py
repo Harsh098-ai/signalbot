@@ -18,7 +18,13 @@ from store import Store
 
 
 def run(dry_run=False, lookback_days=7, limit=None, verbose=True):
-    store = Store()
+    # If email is not configured, run in preview mode and record nothing, so
+    # the accounts found today are still fresh when you do set email up.
+    can_send = bool(config.SMTP_USER and config.SMTP_PASS) and not dry_run
+    if not can_send:
+        print("Email not configured, running in preview mode. Nothing will be saved.\n")
+
+    store = Store(persist=can_send)
     results = []
 
     print("Discovering companies from funding news...")
