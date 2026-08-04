@@ -50,7 +50,10 @@ CREATE TABLE IF NOT EXISTS reported (
 
 
 class Store:
-    def __init__(self, path=None):
+    def __init__(self, path=None, persist=True):
+        # persist=False means run normally but write nothing. Used when email
+        # is not configured yet, so a test run does not consume the signals.
+        self.persist = persist
         self.conn = sqlite3.connect(path or config.DB_PATH)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
@@ -58,6 +61,8 @@ class Store:
 
     # -- companies ----------------------------------------------------------
     def upsert_company(self, name, **fields):
+        if not self.persist:
+            return
         today = dt.date.today().isoformat()
         cur = self.conn.execute("SELECT name FROM companies WHERE name = ?", (name,))
         if cur.fetchone() is None:
@@ -84,6 +89,8 @@ class Store:
 
     # -- job tracking -------------------------------------------------------
     def record_snapshot(self, company, open_roles):
+        if not self.persist:
+            return
         self.conn.execute(
             "INSERT OR REPLACE INTO job_snapshots (company, run_date, open_roles) VALUES (?, ?, ?)",
             (company, dt.date.today().isoformat(), open_roles),
@@ -113,11 +120,13 @@ class Store:
             )
             if cur.fetchone() is None:
                 fresh.append(job)
-                self.conn.execute(
-                    "INSERT INTO seen_jobs (company, job_id, title, first_seen) VALUES (?, ?, ?, ?)",
-                    (company, jid, job.get("title", ""), today),
-                )
-        self.conn.commit()
+                if self.persist:
+                    self.conn.execute(
+                        "INSERT INTO seen_jobs (company, job_id, title, first_seen) VALUES (?, ?, ?, ?)",
+                        (company, jid, job.get("title", ""), today),
+                    )
+        if self.persist:
+            self.conn.commit()
         return fresh
 
     # -- reporting ----------------------------------------------------------
@@ -130,6 +139,8 @@ class Store:
         return cur.fetchone() is not None
 
     def mark_reported(self, company, score, payload):
+        if not self.persist:
+            return
         self.conn.execute(
             "INSERT OR REPLACE INTO reported (company, run_date, score, payload) VALUES (?, ?, ?, ?)",
             (company, dt.date.today().isoformat(), score, json.dumps(payload, default=str)),
