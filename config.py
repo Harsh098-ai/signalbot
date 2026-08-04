@@ -78,34 +78,58 @@ COMPETITOR_KEYWORDS = [
     "appdynamics", "sumo logic", "honeycomb", "lightstep",
 ]
 
+# Weights reflect your stated priority order:
+#   1. Funding   2. Tech stack fit   3. Expansion   4. SRE/DevOps hiring
 SCORE_WEIGHTS = {
-    "new_reliability_role": 40,   # per role, capped below
-    "leadership_hire": 20,
-    "observability_stack": 15,
-    "scale_keyword": 4,           # per keyword, capped
-    "cloud": 5,
-    "competitor_mention": 12,     # displacement opportunity
-    "funding_seed": 10,
-    "funding_series_a": 22,
-    "funding_series_b": 26,
-    "funding_series_c": 24,
-    "funding_other": 12,
-    "hiring_surge": 20,           # open roles grew sharply
+    # 1. Funding, the anchor signal
+    "funding_seed": 30,
+    "funding_series_a": 45,
+    "funding_series_b": 50,
+    "funding_series_c": 45,
+    "funding_other": 25,
+
+    # 2. Tech stack fit
+    "observability_stack": 30,    # running DIY monitoring today
+    "competitor_mention": 22,     # already paying someone, displacement play
+    "scale_keyword": 6,           # per keyword, capped below
+    "cloud": 8,
+
+    # 3. Expansion
+    "hiring_surge": 22,
+    "leadership_hire": 12,
+
+    # 4. Reliability hiring
+    "new_reliability_role": 14,   # per role, capped below
 }
 
 SCORE_CAPS = {
-    "new_reliability_role": 80,
-    "scale_keyword": 20,
+    "new_reliability_role": 35,
+    "scale_keyword": 30,
 }
 
 # Minimum score before an account earns a place in the digest
-MIN_SCORE_TO_REPORT = 30
+MIN_SCORE_TO_REPORT = 45
+
+# An account is "qualified" only when we have actually read its job board.
+# Funding-only names go to a separate watchlist section so the digest never
+# turns into a rewrite of the funding news.
+REQUIRE_JOB_BOARD_FOR_QUALIFIED = True
+MIN_SCORE_FOR_WATCHLIST = 30
 
 # ---------------------------------------------------------------------------
-# HEADCOUNT PROXY (0 to 1000)
-# Free sources do not give reliable headcount, so we approximate.
+# HEADCOUNT (your 0 to 1000 requirement)
 # ---------------------------------------------------------------------------
-MAX_OPEN_ROLES = 150      # more than this usually means a large enterprise
+HEADCOUNT_CEILING = 1000
+
+# Check Wikidata for a real employee count. Free, but adds a second or two per
+# company. Set False to fall back to funding stage and hiring volume alone.
+USE_WIKIDATA = True
+
+# When headcount cannot be confirmed, keep the account but flag it, rather than
+# dropping it. Set True to be strict and drop anything unconfirmed.
+DROP_UNCONFIRMED_HEADCOUNT = False
+
+MAX_OPEN_ROLES = 150      # crude upper bound, very high volume means large org
 EXCLUDE_STAGES = ["series d", "series e", "series f", "series g", "ipo", "pre-ipo"]
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,20 @@ LEAD_NOISE = re.compile(
     re.IGNORECASE,
 )
 
+SECTOR_WORDS = {
+    "fintech": "Fintech", "insurtech": "Insurtech", "healthtech": "Healthtech",
+    "edtech": "Edtech", "agritech": "Agritech", "d2c": "D2C", "b2b": "B2B",
+    "saas": "SaaS", "logistics": "Logistics", "deeptech": "Deeptech",
+    "ai": "AI", "ecommerce": "Ecommerce", "e-commerce": "Ecommerce",
+    "mobility": "Mobility", "proptech": "Proptech", "gaming": "Gaming",
+    "cybersecurity": "Cybersecurity", "spacetech": "Spacetech",
+    "cleantech": "Cleantech", "foodtech": "Foodtech", "hrtech": "HRtech",
+}
+
+INVESTOR_PATTERN = re.compile(
+    r"(?:led by|backed by|from)\s+([A-Z][\w&.\- ]{2,40}?)(?:,| and | in | to |$)",
+)
+
 STAGE_PATTERNS = [
     (re.compile(r"\bpre[- ]?seed\b", re.I), "pre-seed"),
     (re.compile(r"\bseed\b", re.I), "seed"),
@@ -81,6 +95,19 @@ def _extract_amount(text):
     return match.group(1).strip() if match else ""
 
 
+def _extract_sector(text):
+    lowered = text.lower()
+    for word, label in SECTOR_WORDS.items():
+        if re.search(rf"\b{re.escape(word)}\b", lowered):
+            return label
+    return ""
+
+
+def _extract_investors(text):
+    match = INVESTOR_PATTERN.search(text)
+    return match.group(1).strip() if match else ""
+
+
 def slugify(name):
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
@@ -134,8 +161,10 @@ def discover(feeds=None, lookback_days=7, verbose=True):
                 "funding_stage": stage,
                 "funding_amount": _extract_amount(blob),
                 "funding_url": entry.get("link", ""),
+                "sector": _extract_sector(blob),
+                "investors": _extract_investors(title),
                 "headline": title,
-                "published": published.isoformat() if published else "",
+                "published": published.strftime("%d %b %Y") if published else "",
             }
         time.sleep(0.5)  # be polite
 

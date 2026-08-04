@@ -14,7 +14,7 @@ import config
 import discover
 import seeds
 import ats
-import signals
+import account
 import digest
 from store import Store
 
@@ -66,7 +66,7 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
         worklist = worklist[:limit]
 
     print("Checking job boards...")
-    with_board, without_board = [], []
+    with_board, without_board, rejected = [], [], []
 
     for company in worklist:
         name = company["name"]
@@ -90,6 +90,14 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
                 funding_amount=company["funding_amount"],
                 funding_url=company["funding_url"],
             )
+            # No board, but a recent raise is still worth a watchlist mention.
+            if company.get("source") == "news":
+                watch = account.build_account(company, [], [], None)
+                if (watch["score"] >= config.MIN_SCORE_FOR_WATCHLIST
+                        and watch["in_band"]
+                        and not store.already_reported(name)):
+                    results.append(watch)
+                    store.mark_reported(name, watch["score"], watch)
             continue
 
         with_board.append((name, found_ats, slug, len(jobs)))
@@ -110,7 +118,11 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
         new_jobs = store.filter_new_jobs(name, jobs)
         store.record_snapshot(name, len(jobs))
 
-        scored = signals.score_account(company, jobs, new_jobs, previous)
+        scored = account.build_account(company, jobs, new_jobs, previous)
+
+        if not scored["in_band"]:
+            rejected.append((name, scored["size_reason"]))
+            continue
 
         if scored["score"] >= config.MIN_SCORE_TO_REPORT and not store.already_reported(name):
             results.append(scored)
@@ -121,8 +133,18 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
     print(f"Companies checked          : {len(worklist)}")
     print(f"Readable job board found   : {len(with_board)}")
     print(f"No board found             : {len(without_board)}")
-    print(f"Cleared score threshold {config.MIN_SCORE_TO_REPORT:<3}: {len(results)}")
+    print(f"Dropped, over {config.HEADCOUNT_CEILING} headcount : {len(rejected)}")
+    confirmed = [r for r in results if r.get("verified")]
+    unconfirmed = [r for r in results if not r.get("verified")]
+    print(f"Accounts, signals confirmed: {len(confirmed)}")
+    print(f"Accounts, funding only     : {len(unconfirmed)}")
     print(f"{'-' * 55}\n")
+
+    if rejected:
+        print("Dropped for headcount:")
+        for name, why in rejected:
+            print(f"  {name:<28} {why}")
+        print()
 
     if diagnose:
         print("Companies WITH a readable board:")
@@ -136,9 +158,10 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
 
     results.sort(key=lambda r: r["score"], reverse=True)
     for r in results:
-        print(f"  {r['score']:>3}  {r['company']}")
-        for reason in r["reasons"][:3]:
-            print(f"         {reason}")
+        print(f"  {r['priority']:<7} {r['company']:<26} "
+              f"{r['employees']:<14} {r.get('funding_label','') or '-'}")
+        for signal in r["signals"][:3]:
+            print(f"          {signal}")
 
     digest.send(results, dry_run=dry_run)
     store.close()
@@ -152,6 +175,9 @@ def demo():
         "funding_stage": "series b",
         "funding_amount": "$34 Mn",
         "funding_url": "https://entrackr.com/example",
+        "sector": "Logistics",
+        "investors": "Accel",
+        "published": "02 Aug 2026",
     }
     jobs = [
         {"id": 1, "title": "Senior Site Reliability Engineer", "location": "Bengaluru",
@@ -167,10 +193,10 @@ def demo():
         {"id": 4, "title": "Product Designer", "location": "Bengaluru",
          "description": "Figma, design systems.", "url": "https://example.com/4", "posted": ""},
     ]
-    scored = signals.score_account(company, jobs, new_jobs=jobs, previous_role_count=2)
-    print(f"{scored['company']}  score {scored['score']}")
-    for reason in scored["reasons"]:
-        print(f"  - {reason}")
+    scored = account.build_account(company, jobs, new_jobs=jobs, previous_role_count=2)
+    print(f"{scored['company']}  {scored['priority']}  {scored['employees']} employees")
+    for signal in scored["signals"]:
+        print(f"  - {signal}")
     digest.send([scored], dry_run=True, out_path="digest_preview.html")
     return [scored]
 
