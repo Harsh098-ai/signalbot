@@ -132,13 +132,26 @@ def build_account(company, jobs, new_jobs, previous_role_count=None,
     clouds = _matches(lowered, config.CLOUD_PROVIDERS)
     onprem = _matches(lowered, config.ONPREM_KEYWORDS)
 
-    cloud_native = bool(clouds)
+    # A job ad listing every provider is a requirements list, not a stack.
+    # Trust it only when a managed service is named or ownership language is used.
+    strong_services = _matches(lowered, config.CLOUD_SERVICES_STRONG)
+    ownership = _matches(lowered, config.CLOUD_OWNERSHIP_PHRASES)
+    providers_named = len({c for c in clouds
+                           if c in ("aws", "azure", "gcp", "google cloud",
+                                    "amazon web services")})
+
+    cloud_credible = bool(strong_services or ownership)
+    if providers_named > config.MAX_CREDIBLE_CLOUD_PROVIDERS and not cloud_credible:
+        clouds = []          # discard, it is a wish list
+
+    cloud_native = bool(clouds) and (cloud_credible or providers_named <= 2)
     cloud_migrating = bool(migration)
 
     if cloud_native:
         score += W["cloud_confirmed"]
-        primary = clouds[0].upper() if len(clouds[0]) <= 5 else clouds[0].title()
-        signals.append(f"Production on cloud ({', '.join(clouds[:3])})")
+        shown = (strong_services or clouds)[:3]
+        basis = "named services" if strong_services else "stated"
+        signals.append(f"Production on cloud, {basis} ({', '.join(shown)})")
     elif onprem and not cloud_migrating:
         blockers.append("On-prem with no migration signal, outside ICP")
 
@@ -168,8 +181,11 @@ def build_account(company, jobs, new_jobs, previous_role_count=None,
     elif has_board and eng_roles == 0:
         blockers.append("No engineering hiring visible")
 
-    leadership = [j for j in jobs
-                  if any(k in j["title"].lower() for k in config.LEADERSHIP_ROLE_KEYWORDS)]
+    leadership = [
+        j for j in jobs
+        if any(k in j["title"].lower() for k in config.LEADERSHIP_ROLE_KEYWORDS)
+        and not any(bad in j["title"].lower() for bad in config.NON_ENGINEERING_TITLES)
+    ]
     if leadership:
         score += W["leadership_hire"]
         signals.append(f"Eng leadership hire ({leadership[0]['title']})")
@@ -235,6 +251,10 @@ def build_account(company, jobs, new_jobs, previous_role_count=None,
     tier = config.INDUSTRY_TIERS.get(industry, 4)
     score = int(score * config.TIER_MULTIPLIER[tier])
 
+    # Already mentions Datadog, so this is not a fresh account.
+    if own_product:
+        score = int(score * config.EXISTING_CUSTOMER_PENALTY)
+
     # === GATES =============================================================
     size = headcount.assess(company.get("name", ""), stage, len(jobs),
                             use_wikidata=config.USE_WIKIDATA)
@@ -257,6 +277,10 @@ def build_account(company, jobs, new_jobs, previous_role_count=None,
         priority = "Medium"
     else:
         priority = "Low"
+
+    # Never let an existing customer sit above a clean account.
+    if own_product and priority == "High":
+        priority = config.EXISTING_CUSTOMER_MAX_PRIORITY
 
     return {
         "company": company.get("name", ""),

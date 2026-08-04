@@ -34,7 +34,7 @@ def build_worklist(lookback_days, verbose):
 
     worklist = {}
 
-    for name in seeds.SEED_COMPANIES:
+    for name, industry in seeds.SEED_COMPANIES.items():
         key = discover.slugify(name)
         worklist[key] = {
             "name": name,
@@ -42,12 +42,16 @@ def build_worklist(lookback_days, verbose):
             "funding_stage": "unknown",
             "funding_amount": "",
             "funding_url": "",
+            "sector": industry,      # declared, so it never lands in Tier 4
             "source": "seed",
         }
 
     # News entries overwrite seeds so the funding context is not lost
     for company in discovered:
         company["source"] = "news"
+        existing = worklist.get(company["slug"])
+        if existing and existing.get("sector") and not company.get("sector"):
+            company["sector"] = existing["sector"]   # keep the declared industry
         worklist[company["slug"]] = company
 
     print(f"Watching {len(worklist)} companies "

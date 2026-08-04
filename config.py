@@ -77,6 +77,26 @@ CLOUD_PROVIDERS = [
     "azure", "aks", "gcp", "google cloud", "gke", "bigquery", "cloud run",
 ]
 
+# Managed services are strong evidence, because you only name these if you
+# actually run them. A bare "AWS/Azure/GCP" in a requirements list is not.
+CLOUD_SERVICES_STRONG = [
+    "ec2", "eks", "ecs", "fargate", "s3", "rds", "aurora", "lambda",
+    "cloudfront", "aks", "azure functions", "cosmos db", "gke", "cloud run",
+    "bigquery", "pub/sub", "cloud sql", "dynamodb", "sqs", "sns", "msk",
+]
+
+# Phrases that show the cloud is theirs, not a line on a wish list
+CLOUD_OWNERSHIP_PHRASES = [
+    "our aws", "our azure", "our gcp", "our cloud", "runs on aws",
+    "running on aws", "hosted on aws", "deployed on aws", "our infrastructure on",
+    "runs on gcp", "running on gcp", "hosted on gcp", "runs on azure",
+    "running on azure", "hosted on azure", "our production", "in production on",
+    "workloads on aws", "workloads on gcp", "workloads on azure",
+]
+
+# More than this many distinct providers named means it is a requirements list
+MAX_CREDIBLE_CLOUD_PROVIDERS = 2
+
 # Actively moving to cloud. Strong budget trigger in its own right.
 MIGRATION_KEYWORDS = [
     "cloud migration", "migrating to aws", "migrate to aws", "migration to cloud",
@@ -112,7 +132,16 @@ LEADERSHIP_ROLE_KEYWORDS = [
     "vp engineering", "vp of engineering", "head of engineering",
     "head of infrastructure", "head of platform", "director of engineering",
     "cto", "chief technology officer", "head of devops", "engineering manager",
-    "director of technology", "head of technology",
+    "director of technology", "head of technology", "director of infrastructure",
+    "engineering director", "platform lead", "head of sre",
+]
+
+# Titles that must never count as engineering leadership, however they read.
+NON_ENGINEERING_TITLES = [
+    "sales", "marketing", "account executive", "customer success",
+    "business development", "revenue", "partnerships", "hr ", "people",
+    "finance", "recruit", "talent", "legal", "operations manager",
+    "content", "brand", "growth marketing", "solutions consultant",
 ]
 
 MIN_ENGINEERING_ROLES = 3      # open eng roles suggesting a team of 10+
@@ -282,6 +311,11 @@ EXCLUDE_COMPANIES = [
 ]
 
 OWN_PRODUCT_KEYWORDS = ["datadog", "dd agent", "datadoghq"]
+
+# An account that already mentions Datadog is not a fresh account. Cap it so it
+# never outranks a clean one, and never let it reach High.
+EXISTING_CUSTOMER_PENALTY = 0.55
+EXISTING_CUSTOMER_MAX_PRIORITY = "Medium"
 
 # ---------------------------------------------------------------------------
 # EMAIL
