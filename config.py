@@ -33,7 +33,19 @@ FUNDING_FEEDS = [
     "https://news.google.com/rss/search?q=indian+company+cloud+migration+OR+AWS+OR+Azure+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
     "https://news.google.com/rss/search?q=indian+company+expands+engineering+team+OR+global+expansion+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
     "https://news.google.com/rss/search?q=india+company+IPO+listing+technology+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
+    # Wider net across your priority industries
+    "https://news.google.com/rss/search?q=india+fintech+OR+bfsi+startup+funding+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=india+manufacturing+digital+transformation+cloud+when:21d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=indian+company+kubernetes+OR+devops+OR+platform+engineering+when:21d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=india+startup+AI+infrastructure+GPU+scaling+when:21d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=indian+SaaS+company+US+expansion+when:21d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=india+bank+OR+nbfc+cloud+migration+AWS+Azure+when:21d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://www.medianama.com/feed/",
+    "https://techcrunch.com/tag/india/feed/",
 ]
+
+# How far back to look for news. Wider window means more companies per run.
+DEFAULT_LOOKBACK_DAYS = 14
 
 FUNDING_VERBS = [
     "raises", "raised", "bags", "secures", "secured", "mops up",
@@ -49,6 +61,12 @@ ATS_ENDPOINTS = {
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=false",
     "recruitee": "https://{slug}.recruitee.com/api/offers/",
     "workable": "https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true",
+    # Indian and other platforms. Response shapes are unverified, so these are
+    # attempted defensively and simply return nothing if the format differs.
+    "smartrecruiters": "https://api.smartrecruiters.com/v1/companies/{slug}/postings",
+    "teamtailor": "https://{slug}.teamtailor.com/jobs.json",
+    "personio": "https://{slug}.jobs.personio.de/search.json",
+    "freshteam": "https://{slug}.freshteam.com/api/job_postings",
 }
 
 # ---------------------------------------------------------------------------
@@ -200,7 +218,33 @@ REQUIRE_FUNDING_FOR_HIGH = True
 # ---------------------------------------------------------------------------
 HEADCOUNT_CEILING = 1000
 USE_WIKIDATA = True
-DROP_UNCONFIRMED_HEADCOUNT = False
+
+# How to handle a company whose headcount cannot be confirmed.
+#
+#   "strict"    keep only if the WHOLE estimated band sits under the ceiling.
+#               Drops Series C and heavy hirers. Fewer accounts, none too big.
+#   "balanced"  keep unless the band sits entirely above the ceiling.
+#   "loose"     keep unless a confirmed figure exceeds the ceiling.
+#
+HEADCOUNT_STRICTNESS = "strict"
+
+# Companies known to be over 1000 in India. Free data will not catch these
+# reliably, so they are hard-blocked by name. Add any that slip through.
+KNOWN_TOO_LARGE = [
+    "postman", "zeta", "cred", "groww", "navi", "swiggy", "zomato", "meesho",
+    "phonepe", "razorpay", "paytm", "byju", "unacademy", "dream11", "sharechat",
+    "flipkart", "myntra", "nykaa", "lenskart", "delhivery", "zerodha", "policybazaar",
+    "freshworks", "zoho", "innovaccer", "browserstack", "chargebee", "darwinbox",
+    "icertis", "mindtickle", "whatfix", "cleartax", "urban company", "oyo",
+    "ola", "uber", "amazon", "flipkart", "pharmeasy", "practo", "healthifyme",
+    "zetwerk", "udaan", "cars24", "spinny", "licious", "rebel foods", "boat",
+    "mamaearth", "ather", "zepto", "blinkit", "dunzo", "porter", "shiprocket",
+    "moglix", "ninjacart", "dehaat", "capillary", "quantiphi", "tredence",
+    "latentview", "fractal", "mu sigma", "gupshup", "exotel", "amagi",
+    "uniphore", "yellow.ai", "sirionlabs", "zenoti", "clevertap", "moengage",
+    "juspay", "perfios", "kreditbee", "slice", "m2p", "yubi", "keka",
+]
+
 MAX_OPEN_ROLES = 150
 EXCLUDE_STAGES = ["series d", "series e", "series f", "series g", "pre-ipo"]
 

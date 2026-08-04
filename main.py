@@ -53,7 +53,7 @@ def build_worklist(lookback_days, verbose):
     return list(worklist.values())
 
 
-def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False):
+def run(dry_run=False, lookback_days=config.DEFAULT_LOOKBACK_DAYS, limit=None, verbose=True, diagnose=False):
     can_send = bool(config.SMTP_USER and config.SMTP_PASS) and not dry_run and not diagnose
     if not can_send:
         print("Email not configured or preview mode. Nothing will be saved.\n")
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true", help="write HTML preview, do not send")
     parser.add_argument("--demo", action="store_true", help="run offline on sample data")
     parser.add_argument("--diagnose", action="store_true", help="report job board coverage only")
-    parser.add_argument("--days", type=int, default=7, help="funding news lookback window")
+    parser.add_argument("--days", type=int, default=config.DEFAULT_LOOKBACK_DAYS, help="funding news lookback window")
     parser.add_argument("--limit", type=int, default=None, help="cap companies checked per run")
     args = parser.parse_args()
 

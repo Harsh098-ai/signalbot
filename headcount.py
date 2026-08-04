@@ -139,6 +139,15 @@ def _proxy_band(stage, open_roles):
     return low, high
 
 
+def is_known_too_large(name):
+    """Hard block by name. Free data cannot reliably size these."""
+    lowered = (name or "").lower().strip()
+    for big in config.KNOWN_TOO_LARGE:
+        if lowered == big or lowered.startswith(big + " ") or f" {big}" in lowered:
+            return True
+    return False
+
+
 def assess(name, stage, open_roles, use_wikidata=True):
     """
     Returns a dict:
@@ -153,6 +162,17 @@ def assess(name, stage, open_roles, use_wikidata=True):
     """
     stage = (stage or "unknown").lower()
     ceiling = config.HEADCOUNT_CEILING
+    mode = getattr(config, "HEADCOUNT_STRICTNESS", "balanced")
+
+    if is_known_too_large(name):
+        return {
+            "estimate": "over 1,000",
+            "source": "blocklist",
+            "exact": None,
+            "in_band": False,
+            "confidence": "high",
+            "reason": f"{name} is on the known-too-large list, over {ceiling} employees",
+        }
 
     exact = _wikidata_employees(name) if use_wikidata else None
 
@@ -183,9 +203,22 @@ def assess(name, stage, open_roles, use_wikidata=True):
                        f"{ceiling} headcount"),
         }
 
-    # Only reject on the proxy when the whole band sits above the ceiling.
-    # Being unsure should not silently drop a good account.
-    in_band = low <= ceiling
+    # Strictness decides what an unconfirmed estimate means.
+    if mode == "strict":
+        # The entire band must fit under the ceiling.
+        in_band = high <= ceiling
+        reason = (f"Estimated {low} to {high} from {stage} stage and "
+                  f"{open_roles} open roles")
+        if not in_band:
+            reason = (f"Estimated up to {high} employees, which could exceed "
+                      f"{ceiling}. Strict mode drops unconfirmed cases.")
+    elif mode == "loose":
+        in_band = True
+        reason = f"Estimated {low} to {high}, unconfirmed"
+    else:
+        in_band = low <= ceiling
+        reason = (f"Estimated {low} to {high} from {stage} stage and "
+                  f"{open_roles} open roles")
 
     return {
         "estimate": f"{low} to {high}",
@@ -193,6 +226,5 @@ def assess(name, stage, open_roles, use_wikidata=True):
         "exact": None,
         "in_band": in_band,
         "confidence": "low",
-        "reason": (f"Estimated {low} to {high} from {stage} stage and "
-                   f"{open_roles} open roles"),
+        "reason": reason,
     }

@@ -1,51 +1,51 @@
 """
-Seed list of Indian tech companies to check on every run.
+Seed list: Indian tech companies to check every run.
 
-Why this exists: discovery from funding news finds companies that often have no
-readable job board. This list is the opposite, companies that are likely to be
-on Greenhouse, Lever, Ashby, Recruitee or Workable, so the bot has a dependable
-base to watch for SRE hiring even on quiet news days.
+Curated for your ICP, so this list deliberately excludes anything known to be
+over 1000 employees. Those are hard-blocked in config.KNOWN_TOO_LARGE anyway,
+but keeping them out here saves probing time.
 
-The bot probes each name once, caches whichever board it finds, and skips the
-name permanently after three failed attempts. So wrong guesses cost nothing but
-a little time on the first run.
+Weighted toward your priority industries: BFSI and Fintech, Manufacturing,
+then Software and SaaS, then IT Services and EdTech.
 
-Add your own targets to the bottom. One name per line, exactly as the company
-writes it.
+Add your own targets at the bottom. One name per line, as the company writes it.
 """
 
 SEED_COMPANIES = [
-    # Developer tools and infrastructure
-    "Postman", "Hasura", "Atlan", "BrowserStack", "Zluri", "Facets",
-    "Last9", "SigNoz", "Devtron", "Nitrogen", "Chargebee", "Zenskar",
+    # --- Tier 1: Fintech, BFSI, Insurtech -------------------------------
+    "Setu", "Decentro", "Cashfree", "Recko", "Finbox", "Zolve", "Jupiter Money",
+    "Fi Money", "Stable Money", "Wint Wealth", "Dezerv", "Smallcase",
+    "Vested Finance", "InCred Money", "Fisdom", "Kaleidofin", "Rupifi",
+    "Velocity", "GetVantage", "Klub", "Efficient Capital Labs",
+    "Bureau", "IDfy", "Signzy", "HyperVerge", "Karza", "FinBox",
+    "Riskcovry", "Turtlemint", "Onsurity", "Loop Health", "Even Healthcare",
+    "Zopper", "Vitraya", "Artivatic", "Sanas", "Bimaplan",
 
-    # Fintech
-    "Zeta", "Juspay", "Setu", "Signzy", "Perfios", "M2P Fintech", "Yubi",
-    "KreditBee", "Slice", "Jupiter Money", "Fi Money", "Navi", "Groww",
-    "CRED", "Decentro", "Cashfree", "Recko", "Falcon", "Finbox",
+    # --- Tier 1: Manufacturing and industrial ---------------------------
+    "Detect Technologies", "Intangles", "Fero AI", "Wobot AI", "Flexiple",
+    "Ripik AI", "Nanoprecise", "Entrib", "Cognext", "AlphaICs",
+    "Ati Motors", "Grey Orange", "Rapid Fleet", "Bert Labs",
 
-    # SaaS and enterprise
-    "MoEngage", "CleverTap", "Whatfix", "LeadSquared", "Mindtickle",
-    "SirionLabs", "Capillary Technologies", "Zenoti", "Wooqer", "Springworks",
-    "Darwinbox", "Keka", "Kissflow", "Chargebee", "Rocketlane", "Nurture Farm",
+    # --- Tier 2: Software, SaaS, Devtools, AI ---------------------------
+    "Hasura", "Atlan", "Zluri", "Facets", "Devtron", "Zenskar", "Rocketlane",
+    "Nector", "Typeface", "Sarvam AI", "Krutrim", "CoRover", "Neysa",
+    "Kissflow", "Springworks", "Wooqer", "Locobuzz", "Vymo", "Kapture CX",
+    "SquadStack", "Nurix AI", "Attentive AI", "Spotdraft", "Leegality",
+    "Zluri", "Plum", "Jify", "Pazcare", "Nova Benefits",
+    "Hyperbots", "Nutanix India",
+    "Toplyne", "Hevo Data", "Airbyte India", "Rivi", "Assiduus",
+    "AiDash", "Mesh", "Peak XV Portfolio", "Threado", "Fyle", "Volopay",
+    "Zamp", "Kodo", "Enkash", "Zaggle",
 
-    # AI and conversational
-    "Yellow.ai", "Haptik", "Uniphore", "Observe.ai", "Gupshup", "Exotel",
-    "Amagi", "Kaleyra", "Sarvam AI", "Krutrim",
+    # --- Tier 2: Ecommerce and internet ---------------------------------
+    "Vaaree", "Wakefit", "Bombay Shaving Company", "Sleepyhead",
+    "The Whole Truth", "Blue Tokai", "Snitch", "Bewakoof", "Newme",
 
-    # Commerce, logistics and supply chain
-    "Zetwerk", "Moglix", "Bizongo", "Locus", "FarEye", "Shiprocket",
-    "Ninjacart", "DeHaat", "Porter", "Zepto", "Ripplr", "ElasticRun",
+    # --- Tier 3: IT Services, Professional Services, EdTech -------------
+    "Everest Engineering", "Tarento", "Josh Software", "Talentica",
+    "Sahaj Software", "Incubyte", "Nashtech India", "Equal Experts India",
+    "Airmeet", "Teachmint", "Filo", "Classplus", "SP Robotic Works",
+    "Edmingle", "Suraasa", "PhysicsWallah Labs",
 
-    # Consumer
-    "Licious", "Country Delight", "Rebel Foods", "Wakefit", "Noise",
-    "boAt", "Ather Energy", "Spinny", "Lenskart", "Bombay Shaving Company",
-
-    # Health and other
-    "Innovaccer", "PharmEasy", "HealthifyMe", "Practo", "Eka Care",
-
-    # Data and analytics
-    "Sigmoid", "Tredence", "LatentView", "Quantiphi", "Crayon Data",
-
-    # Add your own below
+    # --- Add your own below ---------------------------------------------
 ]
