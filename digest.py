@@ -31,6 +31,9 @@ CSV_COLUMNS = [
     ("priority", "Priority"),
     ("signal_text", "Signals"),
     ("cloud", "Cloud"),
+    ("github_org", "GitHub org"),
+    ("velocity_note", "Hiring trend"),
+    ("status_page", "Status page"),
     ("stack", "Stack seen"),
     ("engineering_roles", "Eng roles open"),
     ("open_roles", "Open roles"),
@@ -63,6 +66,10 @@ tr:last-child td { border-bottom: none; }
 .High { background: #b91c1c; } .Medium { background: #c2670a; } .Low { background: #4d7c0f; }
 .sig { color: #3f3f3f; }
 .sig { line-height: 1.6; }
+.brief { font-size: 13px; color: #1a1a1a; margin-bottom: 7px; }
+.opener { font-size: 12px; color: #1d4ed8; margin-top: 7px;
+          padding: 6px 8px; background: #f0f4ff; border-radius: 4px; }
+.risk { font-size: 11px; color: #b45309; margin-top: 5px; }
 .note { color: #8a8a8a; font-size: 12px; margin-top: 8px; }
 .foot { color: #8a8a8a; font-size: 11px; text-align: center; margin-top: 26px; }
 .empty { background: #fff; border: 1px solid #e4e4e2; border-radius: 6px;
@@ -104,9 +111,20 @@ def _table(accounts):
         fdate = html.escape(acc.get("funding_date", ""))
         funding_meta = " &middot; ".join(b for b in [investors, fdate] if b)
 
+        brief_data = acc.get("brief") or {}
         signal_list = acc.get("signals", [])[:4]
         signals = "<br>&bull; ".join(html.escape(s) for s in signal_list)
         signals = ("&bull; " + signals) if signals else "-"
+
+        if brief_data.get("why_now"):
+            signals = (f"<div class='brief'>{html.escape(brief_data['why_now'])}</div>"
+                       + signals)
+        if brief_data.get("opener"):
+            signals += (f"<div class='opener'><b>Opener:</b> "
+                        f"{html.escape(brief_data['opener'])}</div>")
+        if brief_data.get("risk") and brief_data["risk"].lower() != "none obvious":
+            signals += (f"<div class='risk'>Risk: "
+                        f"{html.escape(brief_data['risk'])}</div>")
 
         pri = acc.get("priority", "Low")
 

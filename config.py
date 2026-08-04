@@ -199,12 +199,39 @@ SCORE_WEIGHTS = {
     "eng_team_depth": 18,        # meets MIN_ENGINEERING_ROLES
     "leadership_hire": 12,
     "new_reliability_role": 12,  # per role, capped below
+
+    # Hard evidence from public code, worth more than a job ad mention
+    "github_kubernetes": 30,
+    "github_terraform": 25,
+    "github_docker": 12,
+    "github_infra_repo": 10,
+
+    # Reliability pain, happening now
+    "status_incidents": 26,
+    "status_page_exists": 8,
+    "blog_infra_topic": 18,
+
+    # Trajectory beats snapshot
+    "velocity_accelerating": 30,
+    "velocity_growing": 15,
 }
 
 SCORE_CAPS = {
     "infra_keyword": 32,
     "new_reliability_role": 30,
 }
+
+# --- extra signal sources -------------------------------------------------
+# GitHub is free. In GitHub Actions, secrets.GITHUB_TOKEN is provided
+# automatically and raises the limit from 60 to 5000 requests an hour.
+USE_GITHUB = True
+
+# Status pages and engineering blogs. Free, needs a domain, which GitHub gives us.
+USE_WEB_SIGNALS = True
+
+# LLM briefs. The only paid part. Off unless ANTHROPIC_API_KEY is set.
+USE_LLM_BRIEFS = True
+LLM_BRIEF_LIMIT = 15          # cap accounts enriched per run, controls cost
 
 MIN_SCORE_TO_REPORT = 60
 MIN_SCORE_FOR_WATCHLIST = 35

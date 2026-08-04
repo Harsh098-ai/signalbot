@@ -15,6 +15,9 @@ import discover
 import seeds
 import ats
 import account
+import github_scan
+import web_signals
+import brief
 import digest
 from store import Store
 
@@ -92,9 +95,15 @@ def run(dry_run=False, lookback_days=config.DEFAULT_LOOKBACK_DAYS, limit=None, v
                 funding_amount=company["funding_amount"],
                 funding_url=company["funding_url"],
             )
-            # No board, but a recent raise is still worth a watchlist mention.
-            if company.get("source") == "news":
-                watch = account.build_account(company, [], [], None)
+            # No job board, but public code is still hard evidence.
+            gh = github_scan.scan(name) if config.USE_GITHUB else None
+            web = None
+            if config.USE_WEB_SIGNALS and gh and gh.get("domain"):
+                web = web_signals.gather(gh["domain"])
+
+            if company.get("source") == "news" or (gh and gh.get("evidence")):
+                watch = account.build_account(company, [], [], None,
+                                              gh=gh, web=web)
                 if (watch["score"] >= config.MIN_SCORE_FOR_WATCHLIST
                         and watch["in_band"]
                         and not store.already_reported(name)):
@@ -119,8 +128,15 @@ def run(dry_run=False, lookback_days=config.DEFAULT_LOOKBACK_DAYS, limit=None, v
         previous = store.previous_role_count(name)
         new_jobs = store.filter_new_jobs(name, jobs)
         store.record_snapshot(name, len(jobs))
+        vel = store.velocity(name)
 
-        scored = account.build_account(company, jobs, new_jobs, previous)
+        gh = github_scan.scan(name) if config.USE_GITHUB else None
+        web = None
+        if config.USE_WEB_SIGNALS and gh and gh.get("domain"):
+            web = web_signals.gather(gh["domain"])
+
+        scored = account.build_account(company, jobs, new_jobs, previous,
+                                       gh=gh, web=web, velocity=vel)
 
         if not scored["icp_fit"]:
             rejected.append((name, "; ".join(scored["blockers"]) or scored["size_reason"]))
@@ -164,6 +180,12 @@ def run(dry_run=False, lookback_days=config.DEFAULT_LOOKBACK_DAYS, limit=None, v
               f"{r['employees']:<14} {r.get('funding_label','') or '-'}")
         for signal in r["signals"][:3]:
             print(f"          {signal}")
+
+    if config.USE_LLM_BRIEFS and brief.ENABLED:
+        print(f"\nWriting briefs for top {min(len(results), config.LLM_BRIEF_LIMIT)} accounts...")
+        brief.enrich_all(results, limit=config.LLM_BRIEF_LIMIT)
+    elif config.USE_LLM_BRIEFS:
+        print("\nLLM briefs skipped, no ANTHROPIC_API_KEY set.")
 
     digest.send(results, dry_run=dry_run)
     store.close()

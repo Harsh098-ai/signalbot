@@ -147,5 +147,60 @@ class Store:
         )
         self.conn.commit()
 
+    def role_history(self, company, days_back=90):
+        """All snapshots for a company, oldest first."""
+        cutoff = (dt.date.today() - dt.timedelta(days=days_back)).isoformat()
+        cur = self.conn.execute(
+            """SELECT run_date, open_roles FROM job_snapshots
+               WHERE company = ? AND run_date >= ?
+               ORDER BY run_date ASC""",
+            (company, cutoff),
+        )
+        return [(r["run_date"], r["open_roles"]) for r in cur.fetchall()]
+
+    def velocity(self, company, days_back=45):
+        """
+        Trajectory rather than a snapshot. Returns a dict or None.
+
+        A company going from 2 to 9 infra roles over six weeks is a far
+        stronger signal than one sitting at 9 the whole time.
+        """
+        history = self.role_history(company, days_back)
+        if len(history) < 2:
+            return None
+
+        first_date, first_count = history[0]
+        last_date, last_count = history[-1]
+        if first_count <= 0:
+            return None
+
+        change = last_count - first_count
+        pct = change / first_count
+        span_days = max(
+            1,
+            (dt.date.fromisoformat(last_date) - dt.date.fromisoformat(first_date)).days,
+        )
+
+        if pct >= 0.5 and change >= 3:
+            trend = "accelerating"
+        elif pct >= 0.2:
+            trend = "growing"
+        elif pct <= -0.3:
+            trend = "contracting"
+        else:
+            trend = "flat"
+
+        return {
+            "trend": trend,
+            "from": first_count,
+            "to": last_count,
+            "change": change,
+            "pct": round(pct, 2),
+            "days": span_days,
+            "readings": len(history),
+            "note": (f"{first_count} to {last_count} open roles over "
+                     f"{span_days} days"),
+        }
+
     def close(self):
         self.conn.close()

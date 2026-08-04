@@ -79,7 +79,8 @@ def _count_engineering_roles(jobs):
 
 
 # ---------------------------------------------------------------------------
-def build_account(company, jobs, new_jobs, previous_role_count=None):
+def build_account(company, jobs, new_jobs, previous_role_count=None,
+                  gh=None, web=None, velocity=None):
     score = 0
     signals = []
     blockers = []
@@ -185,6 +186,50 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
         score += 8
         signals.append(f"{len(reliability)} SRE/DevOps role(s) open")
 
+    # === BLOCK 3b: hard evidence from public code =========================
+    gh = gh or {}
+    gh_evidence = list(gh.get("evidence", []))
+    if gh:
+        repos_text = " ".join(gh.get("infra_repos", [])).lower()
+        if "helm" in repos_text or "chart" in repos_text or "k8s" in repos_text \
+                or "kubernetes" in repos_text or "kubernetes" in gh.get("topics", []):
+            score += W["github_kubernetes"]
+            cloud_native = True
+        if "Terraform" in gh.get("infra_languages", []):
+            score += W["github_terraform"]
+            cloud_native = True
+        if "Docker" in gh.get("infra_languages", []):
+            score += W["github_docker"]
+        if gh.get("infra_repos"):
+            score += W["github_infra_repo"]
+        for line in gh_evidence:
+            signals.append(f"GitHub: {line}")
+
+    # === BLOCK 3c: reliability pain, happening now ========================
+    web = web or {}
+    web_signal_lines = list(web.get("signals", []))
+    status = web.get("status_page")
+    if status:
+        if status.get("recent_incidents", 0) > 0:
+            score += W["status_incidents"]
+        else:
+            score += W["status_page_exists"]
+    if web.get("blog"):
+        score += W["blog_infra_topic"]
+    for line in web_signal_lines:
+        signals.append(line)
+
+    # === BLOCK 3d: trajectory =============================================
+    velocity_note = ""
+    if velocity:
+        velocity_note = velocity.get("note", "")
+        if velocity["trend"] == "accelerating":
+            score += W["velocity_accelerating"]
+            signals.append(f"Hiring accelerating, {velocity_note}")
+        elif velocity["trend"] == "growing":
+            score += W["velocity_growing"]
+            signals.append(f"Hiring growing, {velocity_note}")
+
     # === BLOCK 4: industry tier ============================================
     industry = classify_industry(all_text + " " + news_text, company.get("sector", ""))
     tier = config.INDUSTRY_TIERS.get(industry, 4)
@@ -198,7 +243,8 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
     if not size["in_band"]:
         icp_fit = False
         blockers.append(size["reason"])
-    if has_board and config.REQUIRE_CLOUD_FOR_QUALIFIED and not (cloud_native or cloud_migrating):
+    if (has_board and config.REQUIRE_CLOUD_FOR_QUALIFIED
+            and not (cloud_native or cloud_migrating or gh_evidence)):
         icp_fit = False
         blockers.append("No AWS, Azure or GCP evidence found")
 
@@ -233,8 +279,15 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
         "open_roles": len(jobs),
         "engineering_roles": eng_roles,
         "reliability_roles": len(reliability),
-        "verified": has_board,
+        "verified": has_board or bool(gh_evidence),
         "existing_customer": bool(own_product),
+        "github_org": gh.get("org", ""),
+        "github_evidence": gh_evidence,
+        "domain": gh.get("domain", ""),
+        "india_confirmed": gh.get("india_confirmed", False),
+        "web_signals": web_signal_lines,
+        "status_page": (status or {}).get("url", ""),
+        "velocity_note": velocity_note,
         "score": score,
         "priority": priority,
         "source_url": company.get("funding_url", ""),
