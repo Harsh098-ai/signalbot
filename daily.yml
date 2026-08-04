@@ -1,0 +1,32 @@
+name: Daily account signals
+
+on:
+  schedule:
+    - cron: '30 2 * * 1-5'   # 08:00 IST, weekdays
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install feedparser requests
+
+      - name: Restore signal database
+        uses: actions/cache@v4
+        with:
+          path: signalbot.db
+          key: signalbot-db-${{ github.run_id }}
+          restore-keys: signalbot-db-
+
+      - name: Run bot
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python main.py
