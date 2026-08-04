@@ -1,13 +1,18 @@
 """
-Account record builder.
+Account record builder, driven by the ICP in config.py.
 
-The output of this module is an ACCOUNT, not a job posting. Every field is
-something you would want in an account book: who they are, how big, what they
-just raised, and why they are worth a call for an observability platform.
+An account is scored in four blocks:
 
-Job board data is used as evidence and summarised into one line. It never
-appears as a list of vacancies.
+  1. Budget trigger   funding, IPO, migration, AI workloads, expansion
+  2. Infra fit        cloud confirmed, monitoring stack, complexity keywords
+  3. Engineering org  team depth, leadership, reliability hiring
+  4. Industry tier    multiplier applied at the end
+
+Two hard gates run before any of that: headcount under the ceiling, and
+evidence of cloud. On-prem with no migration intent is outside the ICP.
 """
+
+import re
 
 import config
 import headcount
@@ -21,52 +26,70 @@ def _matches(text, keywords):
     return sorted({k for k in keywords if k in lowered})
 
 
-SECTOR_FROM_TEXT = {
-    "Fintech": ["payments", "lending", "upi", "neobank", "wealth", "mutual fund",
-                "credit", "kyc", "underwriting", "insurance"],
+# ---------------------------------------------------------------------------
+# Industry classification, mapped to your tier list
+# ---------------------------------------------------------------------------
+INDUSTRY_SIGNALS = {
+    "Fintech": ["payments", "upi", "neobank", "lending", "credit underwriting",
+                "wealth management", "mutual fund", "trading platform", "kyc"],
+    "BFSI": ["bank", "banking", "nbfc", "capital markets", "core banking",
+             "treasury", "regulatory reporting", "rbi"],
+    "Insurtech": ["insurance", "policy issuance", "claims processing", "actuarial"],
+    "Manufacturing": ["manufacturing", "plant", "shop floor", "industrial iot",
+                      "scada", "production line", "supply chain planning", "erp"],
+    "SaaS": ["saas", "b2b software", "multi-tenant", "subscription billing",
+             "customer onboarding", "crm", "product-led"],
+    "Devtools": ["developer tools", "api platform", "sdk", "developer experience",
+                 "open source", "ci/cd platform"],
+    "AI": ["llm", "machine learning", "genai", "model serving", "computer vision",
+           "nlp", "inference"],
     "Ecommerce": ["ecommerce", "e-commerce", "marketplace", "catalog", "checkout",
-                  "d2c", "storefront"],
-    "SaaS": ["saas", "b2b software", "subscription", "multi-tenant", "crm", "erp"],
-    "Healthtech": ["patient", "clinical", "healthcare", "diagnostics", "ehr"],
-    "Logistics": ["logistics", "supply chain", "fleet", "warehouse", "last mile",
-                  "delivery", "shipment"],
-    "AI": ["llm", "machine learning", "nlp", "computer vision", "genai",
-           "model training", "inference"],
-    "Devtools": ["developer tools", "api platform", "sdk", "open source",
-                 "developer experience", "ci/cd"],
-    "Edtech": ["learner", "course", "curriculum", "edtech", "student"],
+                  "storefront", "d2c"],
+    "IT Services": ["client engagements", "staff augmentation", "consulting projects",
+                    "system integration", "managed services"],
+    "Edtech": ["learner", "curriculum", "course delivery", "student", "edtech"],
+    "Healthtech": ["patient", "clinical", "diagnostics", "ehr", "telemedicine"],
+    "Logistics": ["logistics", "fleet", "last mile", "warehouse", "shipment"],
+    "Gaming": ["game", "gaming", "multiplayer", "matchmaking"],
 }
 
 
-def _infer_sector(text):
+def classify_industry(text, declared=""):
+    if declared and declared in config.INDUSTRY_TIERS:
+        return declared
     lowered = text.lower()
     best, best_hits = "", 0
-    for label, words in SECTOR_FROM_TEXT.items():
+    for label, words in INDUSTRY_SIGNALS.items():
         hits = sum(1 for w in words if w in lowered)
         if hits > best_hits:
             best, best_hits = label, hits
-    return best if best_hits >= 2 else ""
+    return best if best_hits >= 2 else "Unclassified"
 
 
 def is_excluded(name):
-    """Competitors and observability vendors never belong in the book."""
     lowered = (name or "").lower()
     return any(bad in lowered for bad in config.EXCLUDE_COMPANIES)
 
 
+def _count_engineering_roles(jobs):
+    return sum(
+        1 for j in jobs
+        if any(k in j["title"].lower() for k in config.ENGINEERING_ROLE_KEYWORDS)
+    )
+
+
+# ---------------------------------------------------------------------------
 def build_account(company, jobs, new_jobs, previous_role_count=None):
-    """
-    company: dict from discovery or the seed list
-    jobs:    currently open roles, may be empty
-    Returns a flat account record ready for a table or a spreadsheet row.
-    """
     score = 0
-    signals = []          # short phrases for the "why" column
+    signals = []
+    blockers = []
     has_board = bool(jobs)
     all_text = " ".join(f"{j['title']} {j['description']}" for j in jobs)
+    lowered = all_text.lower()
     stage = (company.get("funding_stage") or "unknown").lower()
+    news_text = f"{company.get('headline','')} {company.get('sector','')}".lower()
 
-    # --- 1. Funding, your top priority ------------------------------------
+    # === BLOCK 1: budget triggers ==========================================
     stage_key = {
         "seed": "funding_seed", "pre-seed": "funding_seed",
         "series a": "funding_series_a", "series b": "funding_series_b",
@@ -76,108 +99,142 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
     funding_label = ""
     if stage_key:
         score += W[stage_key]
-        amount = company.get("funding_amount", "")
-        funding_label = f"{stage.title()} {amount}".strip()
+        funding_label = f"{stage.title()} {company.get('funding_amount','')}".strip()
         signals.append(f"Raised {funding_label}")
     elif company.get("funding_url"):
         score += W["funding_other"]
         funding_label = company.get("funding_amount", "Recent round")
-        signals.append("Recent funding")
+        signals.append("Recent funding round")
 
-    # --- 2. Tech stack fit -------------------------------------------------
-    obs_stack = _matches(all_text, config.OBSERVABILITY_STACK)
-    competitors = _matches(all_text, config.COMPETITOR_KEYWORDS)
-    scale = _matches(all_text, config.SCALE_KEYWORDS)
-    cloud = _matches(all_text, config.CLOUD_KEYWORDS)
+    if re.search(r"\bipo\b|listing|listed on (nse|bse)", news_text):
+        score += W["ipo"]
+        signals.append("IPO or public listing event")
 
+    migration = _matches(lowered, config.MIGRATION_KEYWORDS) + \
+                _matches(news_text, config.MIGRATION_KEYWORDS)
+    if migration:
+        score += W["cloud_migration"]
+        signals.append(f"Cloud migration underway ({migration[0]})")
+
+    ai_work = _matches(lowered, config.AI_WORKLOAD_KEYWORDS)
+    if ai_work:
+        score += W["ai_workloads"]
+        signals.append(f"Scaling AI workloads ({', '.join(ai_work[:2])})")
+
+    expansion = _matches(lowered, config.EXPANSION_KEYWORDS) + \
+                _matches(news_text, config.EXPANSION_KEYWORDS)
+    if expansion:
+        score += W["expansion"]
+        signals.append(f"Geographic expansion ({expansion[0]})")
+
+    # === BLOCK 2: infra fit ================================================
+    clouds = _matches(lowered, config.CLOUD_PROVIDERS)
+    onprem = _matches(lowered, config.ONPREM_KEYWORDS)
+
+    cloud_native = bool(clouds)
+    cloud_migrating = bool(migration)
+
+    if cloud_native:
+        score += W["cloud_confirmed"]
+        primary = clouds[0].upper() if len(clouds[0]) <= 5 else clouds[0].title()
+        signals.append(f"Production on cloud ({', '.join(clouds[:3])})")
+    elif onprem and not cloud_migrating:
+        blockers.append("On-prem with no migration signal, outside ICP")
+
+    obs_stack = _matches(lowered, config.OBSERVABILITY_STACK)
     if obs_stack:
         score += W["observability_stack"]
         signals.append(f"Self-hosted monitoring ({', '.join(obs_stack[:3])})")
-    own_product = [k for k in config.OWN_PRODUCT_KEYWORDS if k in all_text.lower()]
-    rivals = [c for c in competitors if c not in ("datadog",)]
+
+    own_product = [k for k in config.OWN_PRODUCT_KEYWORDS if k in lowered]
+    rivals = _matches(lowered, config.COMPETITOR_KEYWORDS)
     if own_product:
-        signals.append("Already running Datadog, check CRM before working this")
+        signals.append("Already running Datadog, check CRM first")
     if rivals:
         score += W["competitor_mention"]
-        signals.append(f"Using {', '.join(rivals[:2])}, displacement play")
-    if scale:
-        score += min(len(scale) * W["scale_keyword"], CAPS["scale_keyword"])
-        signals.append(f"Distributed systems ({', '.join(scale[:3])})")
-    if cloud:
-        score += W["cloud"]
+        signals.append(f"Competitor in place ({', '.join(rivals[:2])}), displacement")
 
-    stack_summary = ", ".join((obs_stack + cloud + scale)[:6])
+    infra = _matches(lowered, config.INFRA_COMPLEXITY)
+    if infra:
+        score += min(len(infra) * W["infra_keyword"], CAPS["infra_keyword"])
+        signals.append(f"Infra complexity ({', '.join(infra[:4])})")
 
-    # --- 3. Expansion ------------------------------------------------------
-    growth_note = ""
-    if previous_role_count and previous_role_count > 0:
-        growth = (len(jobs) - previous_role_count) / previous_role_count
-        if growth >= 0.5:
-            score += W["hiring_surge"]
-            growth_note = f"{previous_role_count} to {len(jobs)} open roles"
-            signals.append(f"Hiring surge, {growth_note}")
+    # === BLOCK 3: engineering org ==========================================
+    eng_roles = _count_engineering_roles(jobs)
+    if eng_roles >= config.MIN_ENGINEERING_ROLES:
+        score += W["eng_team_depth"]
+        signals.append(f"{eng_roles} engineering roles open, real infra team")
+    elif has_board and eng_roles == 0:
+        blockers.append("No engineering hiring visible")
 
-    leadership = [j for j in new_jobs
+    leadership = [j for j in jobs
                   if any(k in j["title"].lower() for k in config.LEADERSHIP_ROLE_KEYWORDS)]
     if leadership:
         score += W["leadership_hire"]
-        signals.append(f"Building eng leadership ({leadership[0]['title']})")
+        signals.append(f"Eng leadership hire ({leadership[0]['title']})")
 
-    # --- 4. Reliability hiring, summarised not listed ----------------------
     reliability = [j for j in jobs
                    if any(k in j["title"].lower() for k in config.RELIABILITY_ROLE_KEYWORDS)]
     new_reliability = [j for j in new_jobs
                        if any(k in j["title"].lower() for k in config.RELIABILITY_ROLE_KEYWORDS)]
-
     if new_reliability:
         score += min(len(new_reliability) * W["new_reliability_role"],
                      CAPS["new_reliability_role"])
-        signals.append(f"Hiring {len(new_reliability)} reliability role(s)")
+        signals.append(f"Hiring {len(new_reliability)} SRE/DevOps role(s)")
     elif reliability:
         score += 8
-        signals.append(f"{len(reliability)} reliability role(s) open")
+        signals.append(f"{len(reliability)} SRE/DevOps role(s) open")
 
-    # --- 5. Headcount, the 0 to 1000 gate ----------------------------------
-    size = headcount.assess(
-        company.get("name", ""), stage, len(jobs),
-        use_wikidata=config.USE_WIKIDATA,
-    )
+    # === BLOCK 4: industry tier ============================================
+    industry = classify_industry(all_text + " " + news_text, company.get("sector", ""))
+    tier = config.INDUSTRY_TIERS.get(industry, 4)
+    score = int(score * config.TIER_MULTIPLIER[tier])
 
-    # --- 6. Priority band --------------------------------------------------
-    has_funding = bool(stage_key or company.get("funding_url"))
-    if score >= 100 and (has_funding or not config.REQUIRE_FUNDING_FOR_HIGH):
+    # === GATES =============================================================
+    size = headcount.assess(company.get("name", ""), stage, len(jobs),
+                            use_wikidata=config.USE_WIKIDATA)
+
+    icp_fit = True
+    if not size["in_band"]:
+        icp_fit = False
+        blockers.append(size["reason"])
+    if has_board and config.REQUIRE_CLOUD_FOR_QUALIFIED and not (cloud_native or cloud_migrating):
+        icp_fit = False
+        blockers.append("No AWS, Azure or GCP evidence found")
+
+    # === PRIORITY ==========================================================
+    has_budget_trigger = bool(stage_key or company.get("funding_url")
+                              or migration or expansion or ai_work)
+    if score >= 130 and (has_budget_trigger or not config.REQUIRE_FUNDING_FOR_HIGH):
         priority = "High"
-    elif score >= 100:
-        priority = "Medium"   # strong fit but no funding event, so not urgent
-    elif score >= 60:
+    elif score >= 80:
         priority = "Medium"
     else:
         priority = "Low"
 
     return {
-        # identity
         "company": company.get("name", ""),
-        "sector": (company.get("sector") or _infer_sector(all_text) or "Unclassified"),
-        # size
+        "industry": industry,
+        "tier": tier,
         "employees": size["estimate"],
         "employees_source": size["source"],
         "in_band": size["in_band"],
+        "icp_fit": icp_fit,
         "size_reason": size["reason"],
-        # funding
         "funding_stage": stage.title() if stage != "unknown" else "",
         "funding_amount": company.get("funding_amount", ""),
         "funding_label": funding_label,
         "investors": company.get("investors", ""),
         "funding_date": company.get("published", ""),
-        # evidence
+        "cloud": ", ".join(clouds[:3]),
         "signals": signals,
-        "stack": stack_summary,
+        "blockers": blockers,
+        "stack": ", ".join((obs_stack + infra)[:6]),
         "open_roles": len(jobs),
+        "engineering_roles": eng_roles,
         "reliability_roles": len(reliability),
-        "growth_note": growth_note,
         "verified": has_board,
         "existing_customer": bool(own_product),
-        # ranking
         "score": score,
         "priority": priority,
         "source_url": company.get("funding_url", ""),

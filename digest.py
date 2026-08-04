@@ -20,7 +20,8 @@ import config
 
 CSV_COLUMNS = [
     ("company", "Company"),
-    ("sector", "Sector"),
+    ("industry", "Industry"),
+    ("tier", "Tier"),
     ("employees", "Est. employees"),
     ("employees_source", "Size basis"),
     ("funding_stage", "Stage"),
@@ -29,7 +30,9 @@ CSV_COLUMNS = [
     ("funding_date", "Funding date"),
     ("priority", "Priority"),
     ("signal_text", "Signals"),
+    ("cloud", "Cloud"),
     ("stack", "Stack seen"),
+    ("engineering_roles", "Eng roles open"),
     ("open_roles", "Open roles"),
     ("reliability_roles", "Reliability roles"),
     ("verified", "Job board read"),
@@ -92,7 +95,7 @@ def _table(accounts):
         name = html.escape(acc["company"])
         name_cell = f"<a href='{html.escape(link)}'>{name}</a>" if link else name
 
-        sector = html.escape(acc.get("sector", ""))
+        sector = html.escape(f"{acc.get('industry','')} · T{acc.get('tier',4)}")
         size = html.escape(str(acc.get("employees", "")))
         basis = "confirmed" if acc.get("employees_source") == "wikidata" else "estimated"
 

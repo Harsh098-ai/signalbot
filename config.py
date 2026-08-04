@@ -1,34 +1,47 @@
 """
-Configuration for the account signal bot.
-Everything here is free to access. No API keys except your own SMTP login.
+Configuration, built around your ICP.
+
+ICP summary
+-----------
+Geography    India
+Size         0 to 1000 employees
+Infra        Running production workloads on AWS, Azure or GCP, or actively
+             migrating to them. Pure on-prem with no migration intent is out.
+Eng team     10 or more engineers, with DevOps, SRE, platform or eng leadership
+Budget cue   Fresh funding, IPO, international expansion, cloud migration,
+             platform modernisation, or AI workload scaling
+
+Industry priority
+-----------------
+Tier 1  BFSI, Fintech, Manufacturing              highest value per account
+Tier 2  Software, Internet, SaaS                  highest volume
+Tier 3  Professional and IT Services, EdTech      third
 """
 
 import os
 
 # ---------------------------------------------------------------------------
-# DISCOVERY: where new Indian companies come from
+# DISCOVERY
 # ---------------------------------------------------------------------------
-# All free RSS. Entrackr and Inc42 are the highest signal for Indian funding.
 FUNDING_FEEDS = [
     "https://entrackr.com/feed/",
     "https://inc42.com/feed/",
     "https://yourstory.com/feed",
     "https://www.vccircle.com/rss/technology",
-    # Google News is a free catch-all. Tune the query as you like.
     "https://news.google.com/rss/search?q=india+startup+raises+funding+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
     "https://news.google.com/rss/search?q=india+saas+company+series+A+OR+series+B+funding+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
-    "https://news.google.com/rss/search?q=indian+startup+expands+engineering+team+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=indian+company+cloud+migration+OR+AWS+OR+Azure+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=indian+company+expands+engineering+team+OR+global+expansion+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
+    "https://news.google.com/rss/search?q=india+company+IPO+listing+technology+when:14d&hl=en-IN&gl=IN&ceid=IN:en",
 ]
 
-# Headline patterns that mean "this company just raised money".
-# Indian tech press headlines are formulaic, which works in our favour.
 FUNDING_VERBS = [
     "raises", "raised", "bags", "secures", "secured", "mops up",
     "picks up", "closes", "lands", "nets", "scores", "receives",
 ]
 
 # ---------------------------------------------------------------------------
-# SIGNAL ENGINE: public ATS job board endpoints (no auth needed)
+# JOB BOARDS (public JSON, no auth)
 # ---------------------------------------------------------------------------
 ATS_ENDPOINTS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true",
@@ -39,124 +52,180 @@ ATS_ENDPOINTS = {
 }
 
 # ---------------------------------------------------------------------------
-# SCORING: what actually matters for an observability sale
+# HARD REQUIREMENT 1: cloud-native or cloud-migrating
 # ---------------------------------------------------------------------------
+CLOUD_PROVIDERS = [
+    "aws", "amazon web services", "ec2", "eks", "s3", "lambda", "fargate",
+    "azure", "aks", "gcp", "google cloud", "gke", "bigquery", "cloud run",
+]
 
-# The single strongest buying signal. They are staffing the function that buys you.
+# Actively moving to cloud. Strong budget trigger in its own right.
+MIGRATION_KEYWORDS = [
+    "cloud migration", "migrating to aws", "migrate to aws", "migration to cloud",
+    "lift and shift", "re-platform", "replatform", "modernization",
+    "modernisation", "cloud transformation", "moving off on-prem",
+    "legacy modernization", "monolith to microservices", "cloud adoption",
+    "hybrid cloud", "multi cloud", "multi-cloud",
+]
+
+# On-prem only, with no migration language, is out of ICP.
+ONPREM_KEYWORDS = [
+    "on-premise", "on premise", "on-prem", "bare metal", "colocation",
+    "data centre", "data center", "physical servers", "racks",
+]
+
+# ---------------------------------------------------------------------------
+# HARD REQUIREMENT 2: real engineering org
+# ---------------------------------------------------------------------------
 RELIABILITY_ROLE_KEYWORDS = [
     "site reliability", "sre", "devops", "platform engineer",
     "infrastructure engineer", "observability", "cloud engineer",
     "production engineer", "systems engineer", "platform engineering",
+    "cloud architect", "solutions architect",
 ]
 
-# Leadership hires. Bigger budget authority, longer cycle, worth flagging separately.
+ENGINEERING_ROLE_KEYWORDS = [
+    "engineer", "developer", "architect", "sre", "devops", "backend",
+    "full stack", "fullstack", "data engineer", "ml engineer", "qa",
+    "technical lead", "tech lead",
+]
+
 LEADERSHIP_ROLE_KEYWORDS = [
     "vp engineering", "vp of engineering", "head of engineering",
     "head of infrastructure", "head of platform", "director of engineering",
     "cto", "chief technology officer", "head of devops", "engineering manager",
+    "director of technology", "head of technology",
 ]
 
-# Stack keywords inside job descriptions. This is free tech-stack detection.
+MIN_ENGINEERING_ROLES = 3      # open eng roles suggesting a team of 10+
+
+# ---------------------------------------------------------------------------
+# PERSONA AND INFRA COMPLEXITY KEYWORDS
+# ---------------------------------------------------------------------------
+INFRA_COMPLEXITY = [
+    "kubernetes", "k8s", "autoscaling", "auto-scaling", "containers",
+    "docker", "microservices", "hosts", "infrastructure", "monitoring",
+    "distributed systems", "multi-region", "high availability", "terraform",
+    "service mesh", "istio", "helm", "ci/cd", "high traffic", "low latency",
+    "sla", "slo", "incident response", "on-call", "on call", "postmortem",
+    "observability", "apm", "tracing", "logging", "metrics",
+]
+
+# Running their own monitoring today. Best possible fit signal.
 OBSERVABILITY_STACK = [
     "prometheus", "grafana", "opentelemetry", "otel", "jaeger", "zipkin",
     "elk", "elasticsearch", "loki", "fluentd", "fluent bit", "pagerduty",
-    "opsgenie", "cloudwatch", "nagios", "zabbix", "signoz",
+    "opsgenie", "cloudwatch", "nagios", "zabbix", "azure monitor",
+    "stackdriver", "cloud logging",
 ]
 
-SCALE_KEYWORDS = [
-    "kubernetes", "k8s", "microservices", "distributed systems",
-    "multi-region", "high availability", "terraform", "service mesh",
-    "istio", "auto-scaling", "high traffic", "low latency", "sla", "slo",
-    "incident response", "on-call", "on call", "postmortem",
-]
-
-CLOUD_KEYWORDS = ["aws", "gcp", "google cloud", "azure", "amazon web services"]
-
-# Already paying a competitor. Different play: displacement, not greenfield.
 COMPETITOR_KEYWORDS = [
-    "datadog", "new relic", "newrelic", "dynatrace", "splunk",
-    "appdynamics", "sumo logic", "honeycomb", "lightstep",
+    "new relic", "newrelic", "dynatrace", "splunk", "appdynamics",
+    "sumo logic", "honeycomb", "lightstep", "grafana cloud", "chronosphere",
 ]
 
-# Weights reflect your stated priority order:
-#   1. Funding   2. Tech stack fit   3. Expansion   4. SRE/DevOps hiring
+# AI workloads mean sudden infra spend and new observability need
+AI_WORKLOAD_KEYWORDS = [
+    "gpu", "llm", "inference at scale", "model serving", "vector database",
+    "training pipeline", "mlops", "ml platform", "ai infrastructure",
+    "genai", "rag pipeline",
+]
+
+# International expansion drives multi-region infra
+EXPANSION_KEYWORDS = [
+    "multi-region", "global expansion", "us market", "eu region",
+    "international expansion", "new geography", "apac expansion",
+    "expanding to", "global rollout",
+]
+
+# ---------------------------------------------------------------------------
+# INDUSTRY TIERS
+# ---------------------------------------------------------------------------
+INDUSTRY_TIERS = {
+    # Tier 1, highest value per account
+    "BFSI": 1, "Fintech": 1, "Insurtech": 1, "Manufacturing": 1,
+    # Tier 2, highest volume
+    "Software": 2, "Internet": 2, "SaaS": 2, "Devtools": 2, "AI": 2,
+    "Ecommerce": 2, "Gaming": 2,
+    # Tier 3
+    "IT Services": 3, "Professional Services": 3, "Edtech": 3,
+    # Outside stated priorities
+    "Healthtech": 4, "Logistics": 4, "Agritech": 4, "D2C": 4,
+    "Mobility": 4, "Proptech": 4, "Unclassified": 4,
+}
+
+TIER_MULTIPLIER = {1: 1.35, 2: 1.20, 3: 1.00, 4: 0.75}
+
+# ---------------------------------------------------------------------------
+# SCORING
+# ---------------------------------------------------------------------------
 SCORE_WEIGHTS = {
-    # 1. Funding, the anchor signal
-    "funding_seed": 30,
-    "funding_series_a": 45,
-    "funding_series_b": 50,
-    "funding_series_c": 45,
-    "funding_other": 25,
+    # Budget triggers, your top-ranked signal group
+    "funding_seed": 25,
+    "funding_series_a": 40,
+    "funding_series_b": 45,
+    "funding_series_c": 40,
+    "funding_other": 20,
+    "ipo": 40,
+    "cloud_migration": 35,
+    "ai_workloads": 25,
+    "expansion": 22,
 
-    # 2. Tech stack fit
-    "observability_stack": 30,    # running DIY monitoring today
-    "competitor_mention": 22,     # already paying someone, displacement play
-    "scale_keyword": 6,           # per keyword, capped below
-    "cloud": 8,
+    # Infra fit
+    "cloud_confirmed": 25,
+    "observability_stack": 28,
+    "competitor_mention": 22,
+    "infra_keyword": 4,          # per keyword, capped below
 
-    # 3. Expansion
-    "hiring_surge": 22,
+    # Engineering org
+    "eng_team_depth": 18,        # meets MIN_ENGINEERING_ROLES
     "leadership_hire": 12,
-
-    # 4. Reliability hiring
-    "new_reliability_role": 14,   # per role, capped below
+    "new_reliability_role": 12,  # per role, capped below
 }
 
 SCORE_CAPS = {
-    "new_reliability_role": 35,
-    "scale_keyword": 30,
+    "infra_keyword": 32,
+    "new_reliability_role": 30,
 }
 
-# Minimum score before an account earns a place in the digest
-MIN_SCORE_TO_REPORT = 45
+MIN_SCORE_TO_REPORT = 60
+MIN_SCORE_FOR_WATCHLIST = 35
 
-# An account is "qualified" only when we have actually read its job board.
-# Funding-only names go to a separate watchlist section so the digest never
-# turns into a rewrite of the funding news.
-REQUIRE_JOB_BOARD_FOR_QUALIFIED = True
-MIN_SCORE_FOR_WATCHLIST = 30
+# Cloud evidence is a hard ICP requirement for a confirmed account.
+REQUIRE_CLOUD_FOR_QUALIFIED = True
+REQUIRE_FUNDING_FOR_HIGH = True
 
 # ---------------------------------------------------------------------------
-# HEADCOUNT (your 0 to 1000 requirement)
+# HEADCOUNT
 # ---------------------------------------------------------------------------
 HEADCOUNT_CEILING = 1000
+USE_WIKIDATA = True
+DROP_UNCONFIRMED_HEADCOUNT = False
+MAX_OPEN_ROLES = 150
+EXCLUDE_STAGES = ["series d", "series e", "series f", "series g", "pre-ipo"]
 
-# Never surface these. Observability vendors are competitors, not prospects.
 EXCLUDE_COMPANIES = [
     "signoz", "grafana", "datadog", "new relic", "dynatrace", "splunk",
     "elastic", "sumo logic", "honeycomb", "lightstep", "chronosphere",
     "middleware", "last9", "levitate",
 ]
 
-# If a job description shows they already run Datadog, they are an existing
-# customer or an active eval, not a fresh account. Flag rather than drop.
 OWN_PRODUCT_KEYWORDS = ["datadog", "dd agent", "datadoghq"]
-
-# Funding is your top-ranked signal, so an account cannot reach High priority
-# on stack signals alone.
-REQUIRE_FUNDING_FOR_HIGH = True
-
-# Check Wikidata for a real employee count. Free, but adds a second or two per
-# company. Set False to fall back to funding stage and hiring volume alone.
-USE_WIKIDATA = True
-
-# When headcount cannot be confirmed, keep the account but flag it, rather than
-# dropping it. Set True to be strict and drop anything unconfirmed.
-DROP_UNCONFIRMED_HEADCOUNT = False
-
-MAX_OPEN_ROLES = 150      # crude upper bound, very high volume means large org
-EXCLUDE_STAGES = ["series d", "series e", "series f", "series g", "ipo", "pre-ipo"]
 
 # ---------------------------------------------------------------------------
 # EMAIL
 # ---------------------------------------------------------------------------
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")          # your gmail address
-SMTP_PASS = os.getenv("SMTP_PASS", "")          # gmail app password, not your login password
-EMAIL_TO = os.getenv("EMAIL_TO", "tanushree.dutta@datadoghq.com")  # where the digest goes
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+EMAIL_TO = os.getenv("EMAIL_TO", "tanushree.dutta@datadoghq.com")
 EMAIL_SUBJECT = "Account signals digest, {date}"
 
 DB_PATH = os.getenv("DB_PATH", "signalbot.db")
 REQUEST_TIMEOUT = 15
 USER_AGENT = "Mozilla/5.0 (compatible; AccountSignalBot/1.0)"
+
+# Legacy aliases kept so older modules keep importing cleanly
+SCALE_KEYWORDS = INFRA_COMPLEXITY
+CLOUD_KEYWORDS = CLOUD_PROVIDERS

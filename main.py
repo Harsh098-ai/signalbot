@@ -122,8 +122,8 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
 
         scored = account.build_account(company, jobs, new_jobs, previous)
 
-        if not scored["in_band"]:
-            rejected.append((name, scored["size_reason"]))
+        if not scored["icp_fit"]:
+            rejected.append((name, "; ".join(scored["blockers"]) or scored["size_reason"]))
             continue
 
         if scored["score"] >= config.MIN_SCORE_TO_REPORT and not store.already_reported(name):
@@ -135,7 +135,7 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
     print(f"Companies checked          : {len(worklist)}")
     print(f"Readable job board found   : {len(with_board)}")
     print(f"No board found             : {len(without_board)}")
-    print(f"Dropped, over {config.HEADCOUNT_CEILING} headcount : {len(rejected)}")
+    print(f"Dropped, outside ICP       : {len(rejected)}")
     confirmed = [r for r in results if r.get("verified")]
     unconfirmed = [r for r in results if not r.get("verified")]
     print(f"Accounts, signals confirmed: {len(confirmed)}")
@@ -143,7 +143,7 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
     print(f"{'-' * 55}\n")
 
     if rejected:
-        print("Dropped for headcount:")
+        print("Dropped, outside ICP:")
         for name, why in rejected:
             print(f"  {name:<28} {why}")
         print()
@@ -158,7 +158,7 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
         store.close()
         return []
 
-    results.sort(key=lambda r: r["score"], reverse=True)
+    results.sort(key=lambda r: (r.get("tier", 4), -r["score"]))
     for r in results:
         print(f"  {r['priority']:<7} {r['company']:<26} "
               f"{r['employees']:<14} {r.get('funding_label','') or '-'}")
