@@ -70,6 +70,8 @@ def run(dry_run=False, lookback_days=7, limit=None, verbose=True, diagnose=False
 
     for company in worklist:
         name = company["name"]
+        if account.is_excluded(name):
+            continue
         existing = store.get_company(name) or {}
 
         if existing.get("probe_failed", 0) >= 3:

@@ -110,22 +110,31 @@ def _wikidata_employees(name):
 def _proxy_band(stage, open_roles):
     """Rough band from funding stage and hiring volume. Returns (low, high)."""
     bands = {
-        "pre-seed": (5, 40),
-        "seed": (10, 70),
-        "series a": (40, 180),
-        "series b": (120, 450),
-        "series c": (300, 900),
+        "pre-seed": (5, 30),
+        "seed": (15, 60),
+        "series a": (50, 160),
+        "series b": (150, 400),
+        "series c": (350, 800),
         "series d": (700, 2000),
     }
-    low, high = bands.get(stage, (20, 800))
 
-    # Heavy hiring shifts the estimate upward
-    if open_roles > 120:
-        low, high = int(low * 1.8), int(high * 1.8)
-    elif open_roles > 60:
-        low, high = int(low * 1.3), int(high * 1.3)
-    elif open_roles < 5:
+    if stage in bands:
+        low, high = bands[stage]
+    elif open_roles:
+        # No funding stage known, so lean on hiring volume alone.
+        # Roughly, open roles sit around 3 to 12 percent of headcount.
+        low, high = max(20, open_roles * 8), open_roles * 30
+    else:
+        low, high = 20, 800
+
+    if open_roles > 80:
+        low, high = int(low * 1.5), int(high * 1.5)
+    elif open_roles and open_roles < 5:
         high = int(high * 0.7)
+
+    # Never imply more precision than we have. Keep the band honestly wide.
+    if high < low * 3:
+        high = low * 3
 
     return low, high
 

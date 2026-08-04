@@ -121,6 +121,21 @@ MIN_SCORE_FOR_WATCHLIST = 30
 # ---------------------------------------------------------------------------
 HEADCOUNT_CEILING = 1000
 
+# Never surface these. Observability vendors are competitors, not prospects.
+EXCLUDE_COMPANIES = [
+    "signoz", "grafana", "datadog", "new relic", "dynatrace", "splunk",
+    "elastic", "sumo logic", "honeycomb", "lightstep", "chronosphere",
+    "middleware", "last9", "levitate",
+]
+
+# If a job description shows they already run Datadog, they are an existing
+# customer or an active eval, not a fresh account. Flag rather than drop.
+OWN_PRODUCT_KEYWORDS = ["datadog", "dd agent", "datadoghq"]
+
+# Funding is your top-ranked signal, so an account cannot reach High priority
+# on stack signals alone.
+REQUIRE_FUNDING_FOR_HIGH = True
+
 # Check Wikidata for a real employee count. Free, but adds a second or two per
 # company. Set False to fall back to funding stage and hiring volume alone.
 USE_WIKIDATA = True

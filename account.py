@@ -21,6 +21,39 @@ def _matches(text, keywords):
     return sorted({k for k in keywords if k in lowered})
 
 
+SECTOR_FROM_TEXT = {
+    "Fintech": ["payments", "lending", "upi", "neobank", "wealth", "mutual fund",
+                "credit", "kyc", "underwriting", "insurance"],
+    "Ecommerce": ["ecommerce", "e-commerce", "marketplace", "catalog", "checkout",
+                  "d2c", "storefront"],
+    "SaaS": ["saas", "b2b software", "subscription", "multi-tenant", "crm", "erp"],
+    "Healthtech": ["patient", "clinical", "healthcare", "diagnostics", "ehr"],
+    "Logistics": ["logistics", "supply chain", "fleet", "warehouse", "last mile",
+                  "delivery", "shipment"],
+    "AI": ["llm", "machine learning", "nlp", "computer vision", "genai",
+           "model training", "inference"],
+    "Devtools": ["developer tools", "api platform", "sdk", "open source",
+                 "developer experience", "ci/cd"],
+    "Edtech": ["learner", "course", "curriculum", "edtech", "student"],
+}
+
+
+def _infer_sector(text):
+    lowered = text.lower()
+    best, best_hits = "", 0
+    for label, words in SECTOR_FROM_TEXT.items():
+        hits = sum(1 for w in words if w in lowered)
+        if hits > best_hits:
+            best, best_hits = label, hits
+    return best if best_hits >= 2 else ""
+
+
+def is_excluded(name):
+    """Competitors and observability vendors never belong in the book."""
+    lowered = (name or "").lower()
+    return any(bad in lowered for bad in config.EXCLUDE_COMPANIES)
+
+
 def build_account(company, jobs, new_jobs, previous_role_count=None):
     """
     company: dict from discovery or the seed list
@@ -60,9 +93,13 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
     if obs_stack:
         score += W["observability_stack"]
         signals.append(f"Self-hosted monitoring ({', '.join(obs_stack[:3])})")
-    if competitors:
+    own_product = [k for k in config.OWN_PRODUCT_KEYWORDS if k in all_text.lower()]
+    rivals = [c for c in competitors if c not in ("datadog",)]
+    if own_product:
+        signals.append("Already running Datadog, check CRM before working this")
+    if rivals:
         score += W["competitor_mention"]
-        signals.append(f"Using {', '.join(competitors[:2])}, displacement play")
+        signals.append(f"Using {', '.join(rivals[:2])}, displacement play")
     if scale:
         score += min(len(scale) * W["scale_keyword"], CAPS["scale_keyword"])
         signals.append(f"Distributed systems ({', '.join(scale[:3])})")
@@ -107,8 +144,11 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
     )
 
     # --- 6. Priority band --------------------------------------------------
-    if score >= 100:
+    has_funding = bool(stage_key or company.get("funding_url"))
+    if score >= 100 and (has_funding or not config.REQUIRE_FUNDING_FOR_HIGH):
         priority = "High"
+    elif score >= 100:
+        priority = "Medium"   # strong fit but no funding event, so not urgent
     elif score >= 60:
         priority = "Medium"
     else:
@@ -117,7 +157,7 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
     return {
         # identity
         "company": company.get("name", ""),
-        "sector": company.get("sector", "") or "Unclassified",
+        "sector": (company.get("sector") or _infer_sector(all_text) or "Unclassified"),
         # size
         "employees": size["estimate"],
         "employees_source": size["source"],
@@ -136,6 +176,7 @@ def build_account(company, jobs, new_jobs, previous_role_count=None):
         "reliability_roles": len(reliability),
         "growth_note": growth_note,
         "verified": has_board,
+        "existing_customer": bool(own_product),
         # ranking
         "score": score,
         "priority": priority,

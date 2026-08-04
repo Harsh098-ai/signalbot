@@ -59,7 +59,7 @@ tr:last-child td { border-bottom: none; }
         border-radius: 3px; color: #fff; letter-spacing: 0.03em; }
 .High { background: #b91c1c; } .Medium { background: #c2670a; } .Low { background: #4d7c0f; }
 .sig { color: #3f3f3f; }
-.sig span { display: block; }
+.sig { line-height: 1.6; }
 .note { color: #8a8a8a; font-size: 12px; margin-top: 8px; }
 .foot { color: #8a8a8a; font-size: 11px; text-align: center; margin-top: 26px; }
 .empty { background: #fff; border: 1px solid #e4e4e2; border-radius: 6px;
@@ -101,8 +101,9 @@ def _table(accounts):
         fdate = html.escape(acc.get("funding_date", ""))
         funding_meta = " &middot; ".join(b for b in [investors, fdate] if b)
 
-        signals = "".join(f"<span>{html.escape(s)}</span>"
-                          for s in acc.get("signals", [])[:4]) or "<span>-</span>"
+        signal_list = acc.get("signals", [])[:4]
+        signals = "<br>&bull; ".join(html.escape(s) for s in signal_list)
+        signals = ("&bull; " + signals) if signals else "-"
 
         pri = acc.get("priority", "Low")
 

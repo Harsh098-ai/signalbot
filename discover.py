@@ -16,13 +16,23 @@ import feedparser
 import config
 
 # Words that appear before a company name and should be stripped off
-LEAD_NOISE = re.compile(
-    r"^(exclusive|breaking|update|report|india[''`]?s|indian|bengaluru[- ]based|"
-    r"mumbai[- ]based|delhi[- ]based|gurugram[- ]based|noida[- ]based|pune[- ]based|"
-    r"hyderabad[- ]based|chennai[- ]based|b2b|b2c|saas|fintech|healthtech|edtech|"
-    r"agritech|d2c|ai|deeptech|logistics|insurtech|startup|firm|platform|company)\b[\s:,-]*",
-    re.IGNORECASE,
+# Descriptor words that appear before a company name. Headlines stack several,
+# e.g. "Home decor marketplace Vaaree raises...", so we strip repeatedly.
+NOISE_WORDS = (
+    r"exclusive|breaking|update|report|just in|"
+    r"india[''`]?s|indian|bengaluru|mumbai|delhi|gurugram|noida|pune|hyderabad|"
+    r"chennai|kolkata|jaipur|ahmedabad|based|"
+    r"b2b|b2c|d2c|saas|paas|ai|ml|genai|deeptech|"
+    r"fintech|healthtech|edtech|agritech|insurtech|proptech|foodtech|hrtech|"
+    r"cleantech|spacetech|medtech|legaltech|regtech|"
+    r"home decor|beauty|fashion|apparel|jewellery|furniture|grocery|quick commerce|"
+    r"e-?commerce|marketplace|logistics|mobility|gaming|cybersecurity|"
+    r"crm|erp|hr|martech|adtech|payments|lending|banking|wealth|insurance|"
+    r"native|vertical|full[- ]stack|omnichannel|"
+    r"startup|start-up|firm|platform|company|brand|venture|maker|provider|player"
 )
+
+LEAD_NOISE = re.compile(rf"^(?:{NOISE_WORDS})\b[\s:,\-]*", re.IGNORECASE)
 
 SECTOR_WORDS = {
     "fintech": "Fintech", "insurtech": "Insurtech", "healthtech": "Healthtech",
@@ -35,8 +45,15 @@ SECTOR_WORDS = {
 }
 
 INVESTOR_PATTERN = re.compile(
-    r"(?:led by|backed by|from)\s+([A-Z][\w&.\- ]{2,40}?)(?:,| and | in | to |$)",
+    r"(?:led by|backed by)\s+([A-Z][\w&.' ]{2,35}?)(?:,| and | in | to |$)",
 )
+
+# Publication names leak in via Google News titles. Never treat these as investors.
+NOT_INVESTORS = [
+    "news", "startup news", "entrackr", "inc42", "yourstory", "vccircle",
+    "moneycontrol", "economic times", "business standard", "livemint",
+    "techcrunch", "the arc", "medianama", "financial express",
+]
 
 STAGE_PATTERNS = [
     (re.compile(r"\bpre[- ]?seed\b", re.I), "pre-seed"),
@@ -105,7 +122,15 @@ def _extract_sector(text):
 
 def _extract_investors(text):
     match = INVESTOR_PATTERN.search(text)
-    return match.group(1).strip() if match else ""
+    if not match:
+        return ""
+    value = match.group(1).strip(" -,")
+    lowered = value.lower()
+    if any(bad in lowered for bad in NOT_INVESTORS):
+        return ""
+    if len(value) < 3 or len(value.split()) > 4:
+        return ""
+    return value
 
 
 def slugify(name):
